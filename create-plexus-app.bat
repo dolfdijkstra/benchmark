@@ -1,1 +1,0 @@
-mvn archetype:create -DarchetypeGroupId=org.codehaus.plexus -DarchetypeArtifactId=plexus-archetype-application -DarchetypeVersion=1.0-alpha-1-SNAPSHOT -DgroupId=org.fatwire.benchmark.plexus -DartifactId=fw-plexus-benchmark-application -DremoteRepositories=http://snapshots.repository.codehaus.org/
