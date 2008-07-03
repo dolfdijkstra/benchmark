@@ -1,0 +1,20 @@
+<classpath>
+  <classpathentry kind="src" path="src/main/java"/>
+  <classpathentry kind="src" path="src/main/resources" excluding="**/*.java"/>
+  <classpathentry kind="output" path="target/classes"/>
+  <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+  <classpathentry kind="var" path="M2_REPO/com/fatwire/benchmark/plexus/fw-benchmark-component/1.0-SNAPSHOT/fw-benchmark-component-1.0-SNAPSHOT.jar"/>
+  <classpathentry kind="var" path="M2_REPO/org/codehaus/plexus/plexus-container-default/1.0-alpha-48/plexus-container-default-1.0-alpha-48.jar"/>
+  <classpathentry kind="var" path="M2_REPO/aspectj/aspectjrt/1.5.3/aspectjrt-1.5.3.jar"/>
+  <classpathentry kind="var" path="M2_REPO/org/codehaus/plexus/plexus-utils/1.4.5/plexus-utils-1.4.5.jar"/>
+  <classpathentry kind="var" path="M2_REPO/org/codehaus/plexus/plexus-classworlds/1.2-alpha-13/plexus-classworlds-1.2-alpha-13.jar"/>
+  <classpathentry kind="var" path="M2_REPO/junit/junit/3.8.1/junit-3.8.1.jar" sourcepath="M2_REPO/junit/junit/3.8.1/junit-3.8.1-sources.jar"/>
+  <classpathentry kind="var" path="M2_REPO/org/apache/xbean/xbean-reflect/3.4/xbean-reflect-3.4.jar"/>
+  <classpathentry kind="var" path="M2_REPO/log4j/log4j/1.2.15/log4j-1.2.15.jar"/>
+  <classpathentry kind="var" path="M2_REPO/commons-logging/commons-logging-api/1.1/commons-logging-api-1.1.jar"/>
+  <classpathentry kind="var" path="M2_REPO/com/fatwire/benchmark/fw-benchmark-core/1.0-SNAPSHOT/fw-benchmark-core-1.0-SNAPSHOT.jar"/>
+  <classpathentry kind="var" path="M2_REPO/commons-math/commons-math/1.2/commons-math-1.2.jar"/>
+  <classpathentry kind="var" path="M2_REPO/commons-httpclient/commons-httpclient/3.0.1/commons-httpclient-3.0.1.jar" sourcepath="M2_REPO/commons-httpclient/commons-httpclient/3.0.1/commons-httpclient-3.0.1-sources.jar"/>
+  <classpathentry kind="var" path="M2_REPO/commons-logging/commons-logging/1.1/commons-logging-1.1.jar" sourcepath="M2_REPO/commons-logging/commons-logging/1.1/commons-logging-1.1-sources.jar"/>
+  <classpathentry kind="var" path="M2_REPO/commons-codec/commons-codec/1.2/commons-codec-1.2.jar"/>
+</classpath>
