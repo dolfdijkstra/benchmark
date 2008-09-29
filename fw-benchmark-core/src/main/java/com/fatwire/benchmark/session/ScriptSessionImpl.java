@@ -5,34 +5,36 @@ import java.util.Iterator;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-public class UserSessionImpl implements UserSession {
-    private static final Log LOG = LogFactory.getLog(UserSessionImpl.class);
+public class ScriptSessionImpl implements ScriptSession {
+    private static final Log LOG = LogFactory.getLog(ScriptSessionImpl.class);
 
     private Page last;
 
-    private Iterator<Page> itor;
+    private final Iterator<Page> itor;
 
     /**
      * @param itor
      */
-    public UserSessionImpl(Iterator<Page> pages) {
+    public ScriptSessionImpl(final Iterator<Page> pages) {
         super();
         this.itor = pages;
     }
 
     /* (non-Javadoc)
-     * @see com.fatwire.benchmark.session.UserSession#finished()
+     * @see com.fatwire.benchmark.session.ScriptSession#finished()
      */
     public boolean finished() {
         return !itor.hasNext();
     }
 
     /* (non-Javadoc)
-     * @see com.fatwire.benchmark.session.UserSession#getNextPage()
+     * @see com.fatwire.benchmark.session.ScriptSession#getNextPage()
      */
     public Page getNextPage() {
-        if (finished())
+        if (finished()) {
             throw new IllegalStateException("Session is finished.");
+        }
+        /*
         if (last != null && last.getReadTime() > 0) {
             try {
                 Thread.sleep(last.getReadTime());
@@ -40,7 +42,11 @@ public class UserSessionImpl implements UserSession {
                 LOG.warn(e,e);
             }
         }
+        */
         last = itor.next();
+        if (LOG.isTraceEnabled()) {
+            LOG.trace("Next page: " + String.valueOf(last));
+        }
         return last;
     }
 

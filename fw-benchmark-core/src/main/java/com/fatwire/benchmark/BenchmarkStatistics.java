@@ -3,32 +3,34 @@ package com.fatwire.benchmark;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.PrintStream;
 import java.io.Writer;
 import java.net.URI;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.TreeMap;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.commons.httpclient.Header;
-import org.apache.commons.math.stat.descriptive.DescriptiveStatistics;
-import org.apache.commons.math.stat.descriptive.SynchronizedDescriptiveStatistics;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.math.stat.descriptive.SynchronizedSummaryStatistics;
 
 import com.fatwire.benchmark.util.FactoryMap;
 
 public class BenchmarkStatistics {
 
-    private static class UriStat {
-        private final DescriptiveStatistics perf = new SynchronizedDescriptiveStatistics();
+    static class UriStat {
+        final SynchronizedSummaryStatistics perf = new SynchronizedSummaryStatistics();
 
-        private final DescriptiveStatistics bytes = new SynchronizedDescriptiveStatistics();
+        final SynchronizedSummaryStatistics bytes = new SynchronizedSummaryStatistics();
 
-        private final FactoryMap<Integer, AtomicInteger> statusCounter = new FactoryMap<Integer, AtomicInteger>(
+        final FactoryMap<Integer, AtomicInteger> statusCounter = new FactoryMap<Integer, AtomicInteger>(
                 new TreeMap<Integer, AtomicInteger>(),
                 new FactoryMap.Factory<Integer, AtomicInteger>() {
 
@@ -37,9 +39,9 @@ public class BenchmarkStatistics {
                     }
                 });
 
-        private final AtomicInteger exceptionCounter = new AtomicInteger();
+        final AtomicInteger exceptionCounter = new AtomicInteger();
 
-        private final AtomicInteger closes = new AtomicInteger();
+        final AtomicInteger closes = new AtomicInteger();
 
         private void incrementStatus(final int status) {
             final AtomicInteger s = statusCounter.get(status);
@@ -86,23 +88,44 @@ public class BenchmarkStatistics {
 
     }
 
-    private final UriStat total = new UriStat();
+    final UriStat total = new UriStat();
 
     private UriStat timed = new UriStat();
 
-    private final Map<URI, UriStat> urlStat = new ConcurrentHashMap<URI, UriStat>();
+    final Map<URI, UriStat> urlStat = new ConcurrentHashMap<URI, UriStat>();
 
     private final ConcurrentLinkedQueue<TransactionPoint> history = new ConcurrentLinkedQueue<TransactionPoint>();
 
     private Timer timer;
 
-    private File intervalStatFile;
+    
+
     private File historyFile;
+
     private AtomicInteger concurrencyCounter = new AtomicInteger();
 
-    private class TimedPrinterTask extends TimerTask {
+    private AtomicLong requestCounter = new AtomicLong();
 
+    private final File reportDirectory;
 
+    private long startTime;
+
+    private long endTime;
+
+    private class IntervalTask extends TimerTask {
+        private final File intervalStatFile;
+        
+        /**
+         * @param intervalStatFile
+         */
+        public IntervalTask(File intervalStatFile) {
+            super();
+            this.intervalStatFile = intervalStatFile;
+            if (intervalStatFile.exists()) {
+                intervalStatFile.delete();
+            }
+
+        }
 
         public void run() {
             final UriStat t = timed;
@@ -118,7 +141,10 @@ public class BenchmarkStatistics {
                 pw = new FileWriter(intervalStatFile, true);
                 pw.write(Long.toString(System.currentTimeMillis()));
                 pw.write('\t');
+                pw.write(Long.toString(requestCounter.get()));
+                pw.write('\t');
                 pw.write(Integer.toString(concurrencyCounter.get()));
+
                 pw.write('\t');
                 pw.write(String.format(
                         "%1$5d\t%2$4.2f\t%3$8.2f\t%4$5d\t%5$5d\t%6$5d", s.perf
@@ -142,19 +168,31 @@ public class BenchmarkStatistics {
 
     }
 
-    public void init() {
-        timer = new Timer(true);
-        this.intervalStatFile= new File("interval-stat.log");
-        if (intervalStatFile.exists()){
-            intervalStatFile.delete();
+    /**
+     * @param reportDirectory
+     */
+    public BenchmarkStatistics(final File reportDirectory) {
+        super();
+        if (reportDirectory.exists() && reportDirectory.isDirectory()) {
+            this.reportDirectory = reportDirectory;
+        } else {
+            throw new IllegalArgumentException(reportDirectory
+                    .getAbsoluteFile()
+                    + " does not exist or is not a directory ");
         }
+    }
 
-        this.historyFile = new File("history.log");
-        if (historyFile.exists()){
+    public void init() {
+        this.startTime = System.currentTimeMillis();
+        timer = new Timer(true);
+
+        timer.scheduleAtFixedRate(new IntervalTask(new File(reportDirectory, "interval-stat.log")), 5000L, 5000L);
+        
+        this.historyFile = new File(reportDirectory, "history.log");
+        if (historyFile.exists()) {
             historyFile.delete();
         }
-        timer.scheduleAtFixedRate(new TimedPrinterTask(),
-                5000L, 5000L);
+
 
         timer.scheduleAtFixedRate(new TimerTask() {
 
@@ -165,12 +203,18 @@ public class BenchmarkStatistics {
             }
 
         }, 1000L, 1000L);
+        consumerThread = new Thread(new TransactionConsumer());
+        consumerThread.start();
 
     }
 
+    private Thread consumerThread;
+
     public void shutdown() {
+        this.endTime = System.currentTimeMillis();
         writeHistory();
         timer.cancel();
+        consumerThread.interrupt();
 
     }
 
@@ -262,15 +306,46 @@ public class BenchmarkStatistics {
 
     }
 
+    private final BlockingQueue<TransactionPoint> myQueue = new LinkedBlockingQueue<TransactionPoint>();
+
+    private final Log log = LogFactory.getLog(this.getClass());
+
     public void finished(final HttpTransaction httpTransaction) {
         concurrencyCounter.decrementAndGet();
         TransactionPoint tp = new TransactionPoint(httpTransaction);
+        if (!myQueue.offer(tp)) {
+            log.warn("Could not add TransactionPoint to the queue");
+        }
 
-        final UriStat s = get(tp.getUri());
-        s.incrementForTransactionPoint(tp);
-        total.incrementForTransactionPoint(tp);
-        timed.incrementForTransactionPoint(tp);
-        this.history.add(tp);
+    }
+
+    class TransactionConsumer implements Runnable {
+double counter=0;
+long totalTime=0;
+        public void run() {
+            boolean c=true;
+            while (c) {
+                TransactionPoint tp;
+                try {
+                    long t = System.nanoTime();
+                    tp = myQueue.take();
+                    //history.add(tp);
+                    total.incrementForTransactionPoint(tp);
+                    timed.incrementForTransactionPoint(tp);
+                    final UriStat s = get(tp.getUri());
+                    s.incrementForTransactionPoint(tp);
+                    counter++;
+                    totalTime = (System.nanoTime()-t)/1000;
+                } catch (InterruptedException e) {
+                    //e.printStackTrace();
+                    if (counter >0){
+                     System.out.println(totalTime/counter);   
+                    }
+                    c=false;
+                }
+            }
+
+        }
 
     }
 
@@ -321,118 +396,31 @@ public class BenchmarkStatistics {
         return s;
     }
 
-    public synchronized void report(final PrintStream pw) {
-        new Reporter(pw).report();
-    }
-
-    private class Reporter {
-        private PrintStream pw;
-
-        /**
-         * @param pw
-         * @param statistics 
-         */
-        public Reporter(final PrintStream pw) {
-            super();
-            this.pw = pw;
-        }
-
-        public void report() {
-            reportTotals(total);
-            reportStatus();
-            pw.println();
-            int maxUriSize = 0;
-            for (final URI u : urlStat.keySet()) {
-                maxUriSize = Math.max(maxUriSize, u.toString().length());
-            }
-
-            pw.println(padded("uri", maxUriSize)
-                    + "\tcount\tmean\tbytes mean\t304s\tcloses\texceptions");
-            for (final Map.Entry<URI, UriStat> entry : new TreeMap<URI, UriStat>(
-                    urlStat).entrySet()) {
-                pw.print(padded(entry.getKey().toString(), maxUriSize));
-                pw.print('\t');
-                report(entry.getValue());
-                pw.println();
-            }
-            pw.flush();
-        }
-
-        public void reportStatus() {
-            pw.println();
-            final int maxSize = "Response status".length();
-
-            pw.println(padded("Response status", maxSize) + "\tcount");
-            for (final Map.Entry<Integer, AtomicInteger> entry : total.statusCounter
-                    .entrySet()) {
-                pw.print(padded(entry.getKey().toString(), maxSize));
-                pw.print('\t');
-                pw.print(entry.getValue());
-                pw.println();
-            }
-        }
-
-        private String padded(final String s, final int size) {
-            final char[] pad = new char[size + 5 - s.length()];
-            Arrays.fill(pad, ' ');
-            return new StringBuilder(s).append(pad).toString();
-
-        }
-
-        private void report(final UriStat s) {
-            int count304 = 0;
-            count304 = s.statusCounter.get(304).get();
-
-            pw.print(String.format(
-                    "%1$5d\t%2$4.2f\t%3$8.2f\t%4$5d\t%5$5d\t%6$5d", s.perf
-                            .getN(), s.perf.getMean(), s.bytes.getMean(),
-                    count304, s.closes.get(), s.exceptionCounter.get()));
-
-        }
-
-        private void reportTotals(final UriStat s) {
-
-            pw.println(String.format("Count:                          %1$10d",
-                    s.perf.getN()));
-            pw.println(String.format(
-                    "Total download time:            %1$10.3f ms", s.perf
-                            .getSum()));
-
-            pw.println(String.format(
-                    "Bytes Read:                     %1$10.3e bytes", s.bytes
-                            .getSum()));
-            pw.println(String.format(
-                    "Average Bytes Read:             %1$10.2f bytes", s.bytes
-                            .getMean()));
-            pw.println(String.format(
-                    "Mean Time per request:          %1$10.2f ms", s.perf
-                            .getMean()));
-            pw.println(String.format(
-                    "Min Time per request:           %1$10.2f ms", s.perf
-                            .getMin()));
-            pw.println(String.format(
-                    "Max Time per request:           %1$10.2f ms", s.perf
-                            .getMax()));
-            pw.println(String.format(
-                    "Std dev:                        %1$10.2f ms", s.perf
-                            .getStandardDeviation()));
-            pw.println(String.format(
-                    "Skewness:                       %1$10.2f", s.perf
-                            .getSkewness()));
-            pw.println(String.format(
-                    "Kurtosis:                       %1$10.2f", s.perf
-                            .getKurtosis()));
-            pw.println(String.format("Connection \'close\' responses: %1$10d",
-                    s.closes.get()));
-            pw.println(String.format("Exceptions reading body:        %1$10d",
-                    s.exceptionCounter.get()));
-
-        }
-
-    }
-
     public void start(long startTime) {
         concurrencyCounter.incrementAndGet();
-
+        this.requestCounter.incrementAndGet();
     }
+
+    public int getCurrentConcurrencyLevel() {
+        return concurrencyCounter.get();
+    }
+
+    public long getRequestCount() {
+        return this.requestCounter.get();
+    }
+
+    /**
+     * @return the startTime
+     */
+    public long getStartTime() {
+        return startTime;
+    }
+
+    /**
+     * @return the endTime
+     */
+    public long getEndTime() {
+        return endTime;
+    }
+
 }

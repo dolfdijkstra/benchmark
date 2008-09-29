@@ -5,6 +5,15 @@ package com.fatwire.benchmark;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * 
+ * Condition that turns false when a certain number of invocations has been reached.
+ * 
+ * 
+ * @author Dolf.Dijkstra
+ * @since Sep 27, 2008
+ */
+
 class CounterConditional implements Condition {
     /**
      * 
@@ -15,9 +24,10 @@ class CounterConditional implements Condition {
 
     private int progressMarker;
 
+    private boolean showProgress = false;
+
     /**
      * @param end
-     * @param mark TODO
      */
     public CounterConditional(final int end) {
         super();
@@ -35,10 +45,12 @@ class CounterConditional implements Condition {
 
     public int increment() {
         int num = counter.incrementAndGet();
-        if (num % progressMarker == 0)
-            System.out.print(".");
-        if (num % 500 == 0)
-            System.out.println();
+        if (showProgress) {
+            if (num % progressMarker == 0)
+                System.out.print(".");
+            if (num % 500 == 0)
+                System.out.println();
+        }
 
         return num;
     }

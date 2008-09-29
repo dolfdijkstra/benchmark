@@ -1,6 +1,6 @@
 package com.fatwire.benchmark.session;
 
-public interface UserSession {
+public interface ScriptSession {
 
     public boolean finished();
 

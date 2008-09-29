@@ -1,75 +1,54 @@
 package com.fatwire.benchmark;
 
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
-import java.io.PrintStream;
-import java.net.URI;
-import java.util.Arrays;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.util.Date;
+
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.PosixParser;
+import org.apache.commons.httpclient.HttpConnectionManager;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 import com.fatwire.benchmark.connectionmanager.BenchmarkHttpConnectionManager;
 import com.fatwire.benchmark.connectionmanager.PoolManager;
-import com.fatwire.benchmark.session.Page;
-import com.fatwire.benchmark.session.RandomScriptFactory;
-import com.fatwire.benchmark.session.Script;
-import com.fatwire.benchmark.session.ScriptFactory;
-import com.fatwire.benchmark.session.SimpleScript;
-import com.fatwire.benchmark.session.SimpleScriptFactory;
+import com.fatwire.benchmark.script.Script;
+import com.fatwire.benchmark.session.NullUserAgentCache;
+import com.fatwire.benchmark.session.UserAgentCacheImpl;
 import com.fatwire.benchmark.util.TrafficLight;
 
-public class FatWireBenchmark {
+public class FatWireBenchmark implements BenchmarkRunner {
+    Log log = LogFactory.getLog(this.getClass());
 
-    private BenchmarkHttpConnectionManager connectionManager;
-
-    private PoolManager poolManager;
-
-    private Condition cond;
-
-    private int numberOfWorkers = 1;
-
-    private long delay = 0;
-
-    private int max = 1;
+    private HttpConnectionManager connectionManager;
 
     private long startTime;
 
     private Script script;
 
-    private String filename;
+    private File reportDirectory;
 
-    private String url;
+    private BenchmarkStatistics stat;
 
-    private String type = "simple";
+    private Schedule schedule;
 
-    private final BenchmarkStatistics stat = new BenchmarkStatistics();
-
+    private WorkerManager workManager;
 
     private long endTime;
 
-    public void init() throws Exception {
-        if (filename != null) {
-            if ("simple".equals(getType())) {
-                ScriptFactory sf = new SimpleScriptFactory(filename, delay);
-                script = sf.getScript();
-            } else if ("random".equals(getType())) {
-                ScriptFactory sf = new RandomScriptFactory(filename, delay);
-                script = sf.getScript();
-            } else {
-                throw new IllegalArgumentException("unknown script type.("
-                        + getType() + ")");
-            }
-        } else {
-            Page p = new Page(URI.create(url));
-            p.setReadTime(delay);
-            script = new SimpleScript(Arrays.asList(new Page[] { p }));
-        }
+    private Condition cond;
 
-        poolManager = new PoolManager(5);
-        connectionManager = new BenchmarkHttpConnectionManager(poolManager);
-        connectionManager.getParams().setDefaultMaxConnectionsPerHost(
-                getNumberOfWorkers() + 5);
-        connectionManager.getParams().setMaxTotalConnections(
-                getNumberOfWorkers() + 5);
-        
-        cond = new CounterConditional(max);
+    /**
+     * flag for user user-agent caching
+     */
+    private boolean userCache = true;
+
+    public void init() throws Exception {
         stat.init();
 
     }
@@ -80,116 +59,186 @@ public class FatWireBenchmark {
      */
     public static void main(final String[] args) throws Exception {
 
-        if (args.length == 0) {
-            System.out.println("needs an argument");
-            return;
-        }
-        final FatWireBenchmark benchmark = new FatWireBenchmark();
-        for (int i = 0; i < args.length - 1; i++) {
-            if ("-c".equals(args[i])) {
-                benchmark.setNumberOfWorkers(Integer.parseInt(args[++i]));
-            } else if ("-n".equals(args[i])) {
-                benchmark.setMax(Integer.parseInt(args[++i]));
-            } else if ("-d".equals(args[i])) {
-                benchmark.setDelay(Integer.parseInt(args[++i]));
-            } else if ("-url".equals(args[i])) {
-                benchmark.setUrl(args[++i]);
-            } else if ("-script".equals(args[i])) {
-                benchmark.setScript(args[++i]);
-            } else if ("-type".equals(args[i])) {
-                benchmark.setType(args[++i]);
+        Options options = CommandLineUtils.getOptions();
+        CommandLineParser parser = new PosixParser();
+        CommandLine cmd = parser.parse(options, args);
 
-            }
+        if (args.length == 0 || cmd.hasOption('h')) {
+            CommandLineUtils.showUsage(options);
+            System.exit(1);
         }
+        Condition cond = new CounterConditional(Integer.MAX_VALUE);
+        
+        final FatWireBenchmark benchmark = new FatWireBenchmark();
+        CommandLineUtils.parseCommandLine(cmd, benchmark);
+        
+        final PoolManager poolManager = new PoolManager(5);
+        final BenchmarkHttpConnectionManager connectionManager = new BenchmarkHttpConnectionManager(
+                poolManager);
+        connectionManager.getParams().setDefaultMaxConnectionsPerHost(
+                benchmark.getSchedule().getPeakConcurrency() + 5);
+        connectionManager.getParams().setMaxTotalConnections(
+                benchmark.getSchedule().getPeakConcurrency() + 5);
+        benchmark.setConnectionManager(connectionManager) ;
+        benchmark.setCond(cond);
+        
         final Thread hook = new Thread(new Runnable() {
 
             public void run() {
                 System.out.println("shutting down");
                 benchmark.shutdown();
+                connectionManager.shutdown();
+                poolManager.shutdown();
             }
 
         });
         Runtime.getRuntime().addShutdownHook(hook);
         benchmark.init();
         benchmark.go();
-        benchmark.shutdown();
         Runtime.getRuntime().removeShutdownHook(hook);
+        hook.start();
+        hook.join();
+        System.exit(0);
+
     }
 
     public void shutdown() {
         doShutdown();
 
-
     }
 
     protected void doShutdown() {
         stat.shutdown();
-        connectionManager.shutdown();
-        poolManager.shutdown();
 
-    }
-
-    public void setUrl(final String uri) {
-        url = uri;
-
-    }
-
-    public void setScript(final String script) {
-        this.filename = script;
-
+        
     }
 
     public void go() throws InterruptedException {
+
         final TrafficLight light = new TrafficLight();
         startTime = System.currentTimeMillis();
+        printSession();
         light.turnGreen();
-
         final HttpMethodListener statListener = new StatisticsListener(stat);
         final ResponseStatusListener statusListener = new ResponseStatusListener();
-        final Thread[] t = new Thread[numberOfWorkers];
-        final HttpWorker[] workers = new HttpWorker[numberOfWorkers];
-        for (int i = 0; i < t.length; i++) {
 
-            final HttpWorker worker = new HttpWorker("agent-" + i,
-                    connectionManager, script, light, cond);
-            worker.addListener(statListener);
-            worker.addListener(statusListener);
-            workers[i] = worker;
+        workManager.setFactory(new WorkerManager.WorkerFactory() {
+            int i = 0;
 
-        }
+            public HttpWorker createWorker() {
+                
+                final HttpWorker worker = new HttpWorker("agent-" + i,
+                        connectionManager, script, light, cond,
+                        userCache ? new UserAgentCacheImpl()
+                                : new NullUserAgentCache());
+                worker.addListener(statListener);
+                worker.addListener(statusListener);
+                i++;
+                return worker;
 
-        for (int i = 0; i < t.length; i++) {
-            if (i > 0) {
-                Thread.sleep(100);
             }
-            t[i] = new Thread(workers[i], workers[i].getName());
-            t[i].start();
-        }
-        for (int i = 0; i < t.length; i++) {
-            t[i].join();
-        }
+
+        });
+        workManager.setCond(cond);
+        workManager.run();
+        workManager.shutdown();
         endTime = System.currentTimeMillis();
         writeReport();
 
     }
 
+    protected void printSession() {
+        StringBuilder sw = new StringBuilder();
+        sw.append("Now:").append(new Date().toString()).append("\r\n");
+        sw.append("StartTime:").append(this.startTime).append("\r\n");
+        //sw.append("Host:").append(this.host).append("\r\n");
+        sw.append("Script:").append(script.toString()).append("\r\n");
+        /*
+        if (this.url == null) {
+            sw.append("ScriptName:").append(this.filename).append("\r\n");
+            sw.append("Type:").append(this.type).append("\r\n");
+        } else {
+            sw.append("URL:").append(this.url).append("\r\n");
+        }
+        */
+        sw.append("Schedule:").append(schedule.toString()).append("\r\n");
+        /*
+        sw.append("NumberOfWorkers:").append(this.numberOfWorkers).append(
+                "\r\n");
+
+        sw.append("Max:").append(this.max).append("\r\n");
+        sw.append("RampUp:").append(this.rampup).append("\r\n");
+        sw.append("Delay:").append(this.delay).append("\r\n");
+        */
+        sw.append("UserCache:").append(this.userCache).append("\r\n");
+
+        FileWriter fw = null;
+        try {
+            fw = new FileWriter(new File(getReportDirectory(), "session.txt"));
+            fw.write(sw.toString());
+
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+        } finally {
+            if (fw != null) {
+                try {
+                    fw.close();
+                } catch (IOException e) {
+                    //ignore
+                }
+            }
+        }
+    }
+
     protected void writeReport() {
-        final PrintStream pw = System.out;
-        pw.println(); //the progress bar needs a new line
+        StringWriter sw = new StringWriter();
+        final PrintWriter pw = new PrintWriter(sw);
+        System.out.println(); //the progress bar needs a new line
         pw.println(String.format("Total number of started requests: %1$10d",
                 cond.getNum()));
 
+        pw.println(String.format("Time taken for tests:             %1$10d s",
+                (endTime - startTime) / 1000L));
         pw.println(String.format(
-                "Time taken for tests:             %1$10.2f s",
-                (endTime - startTime) / 1000D));
-        if (delay > 0) {
+                "Average http req per second:      %1$10.2f t/s", (cond
+                        .getNum() / ((endTime - startTime) / 1000D))));
+
+        if (script.getDefaultDelay() > 0) {
             pw.println(String.format(
-                    "Delay:                            %1$10d ms", delay));
+                    "Delay:                            %1$10d ms", script
+                            .getDefaultDelay()));
         }
         pw.println(String.format("Concurrency Level:                %1$10d",
-                numberOfWorkers));
+                schedule.getPeakConcurrency()));
         pw.println();
-        stat.report(pw);
+
+        Reporter rep = new Reporter(stat, pw);
+        rep.reportTotals();
+        rep.reportStatus();
+        //print to std out
+        pw.flush();
+        System.out.println(sw.toString());
+        rep.reportUris();
+        pw.flush();
+        //and write to file
+        FileWriter fw = null;
+        try {
+            fw = new FileWriter(
+                    new File(getReportDirectory(), "statistics.txt"));
+            fw.write(sw.toString());
+
+        } catch (Exception e) {
+            log.error(e, e);
+        } finally {
+            if (fw != null) {
+                try {
+                    fw.close();
+                } catch (IOException e) {
+                    //ignore
+                }
+            }
+        }
+
     }
 
     /**
@@ -199,50 +248,109 @@ public class FatWireBenchmark {
         return cond;
     }
 
-    public void setMax(final int max) {
-        this.max = max;
-
+    /**
+     * @return the userCache
+     */
+    public boolean isUserCache() {
+        return userCache;
     }
 
     /**
-     * @return the numberOfWorkers
+     * @param userCache the userCache to set
      */
-    public int getNumberOfWorkers() {
-        return numberOfWorkers;
+    public void setUserCache(boolean userCache) {
+        this.userCache = userCache;
     }
 
     /**
-     * @param numberOfWorkers the numberOfWorkers to set
+     * @return the schedule
      */
-    public void setNumberOfWorkers(final int numberOfWorkers) {
-        this.numberOfWorkers = numberOfWorkers;
+    public Schedule getSchedule() {
+        return schedule;
     }
 
     /**
-     * @return the delay
+     * @param schedule the schedule to set
      */
-    public long getDelay() {
-        return delay;
+    public void setSchedule(Schedule schedule) {
+        this.schedule = schedule;
     }
 
     /**
-     * @param delay the delay to set
+     * @return the connectionManager
      */
-    public void setDelay(final long delay) {
-        this.delay = delay;
+    public HttpConnectionManager getConnectionManager() {
+        return connectionManager;
     }
 
     /**
-     * @return the type
+     * @param connectionManager the connectionManager to set
      */
-    public String getType() {
-        return type;
+    public void setConnectionManager(
+            HttpConnectionManager connectionManager) {
+        this.connectionManager = connectionManager;
     }
 
     /**
-     * @param type the type to set
+     * @return the script
      */
-    public void setType(String type) {
-        this.type = type;
+    public Script getScript() {
+        return script;
+    }
+
+    /**
+     * @param script the script to set
+     */
+    public void setScript(Script script) {
+        this.script = script;
+    }
+
+    /**
+     * @return the stat
+     */
+    public BenchmarkStatistics getStat() {
+        return stat;
+    }
+
+    /**
+     * @param stat the stat to set
+     */
+    public void setStat(BenchmarkStatistics stat) {
+        this.stat = stat;
+    }
+
+    /**
+     * @return the workManager
+     */
+    public WorkerManager getWorkManager() {
+        return workManager;
+    }
+
+    /**
+     * @param workManager the workManager to set
+     */
+    public void setWorkManager(WorkerManager workManager) {
+        this.workManager = workManager;
+    }
+
+    /**
+     * @param cond the cond to set
+     */
+    public void setCond(Condition cond) {
+        this.cond = cond;
+    }
+
+    /**
+     * @return the reportDirectory
+     */
+    public File getReportDirectory() {
+        return reportDirectory;
+    }
+
+    /**
+     * @param reportDirectory the reportDirectory to set
+     */
+    public void setReportDirectory(File reportDirectory) {
+        this.reportDirectory = reportDirectory;
     }
 }

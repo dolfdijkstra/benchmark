@@ -8,22 +8,9 @@
             <param name="ConversionPattern" value="%d{ABSOLUTE} %-5p [%c{1}] [%t] %m%n" />
         </layout>
     </appender>
-    <appender name="filelog" class="org.apache.log4j.RollingFileAppender">
-        <param name="file" value="logs/file.log" />
-        <param name="MaxFileSize" value="50MB" />
-        <param name="MaxBackupIndex" value="15" />
-        <param name="append" value="false" />
-        <param name="bufferedIO" value="false" />
-        <param name="BufferSize" value="256" />
-        <layout class="org.apache.log4j.PatternLayout">
-            <param name="ConversionPattern" value="%d{ABSOLUTE} %-5p [%c{1}] [%t] %m%n" />
-        </layout>
-    </appender>
 
     <logger name="com.fatwire">
         <level value="info"></level>
-        <!-- appender-ref ref="filelog" /-->
-
     </logger>
     <logger name="com.fatwire.benchmark.connectionmanager.PerHostConfigurationConnectionPool">
         <level value="info"></level>
@@ -31,19 +18,9 @@
     <logger name="com.fatwire.benchmark.connectionmanager.PooledHttpConnection">
         <level value="trace"></level>
     </logger>
-    <logger name="com.fatwire.benchmark.HttpWorker">
-        <level value="trace"></level>
-    </logger>
-    <logger name="com.fatwire.benchmark.WorkerManager">
-        <level value="trace"></level>
-    </logger>
-
-
 
     <logger name="httpclient.wire.header">
         <level value="info"></level>
-        <!-- appender-ref ref="filelog" /-->
-
     </logger>
 
     <!-- Setup the Root category -->
