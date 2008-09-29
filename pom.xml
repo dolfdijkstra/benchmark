@@ -5,7 +5,7 @@
     <packaging>pom</packaging>
     <name>fw-benchmark-project</name>
     <version>1.0-SNAPSHOT</version>
-    <url>http://www.fatwire.com</url>
+    <url>http://www.nl.fatwire.com/dta/benchmark</url>
     <inceptionYear>2008</inceptionYear>
     <mailingLists>
         <mailingList>
@@ -25,25 +25,20 @@
     <licenses>
         <license>
             <name>FATWIRE SOFTWARE LICENSE AGREEMENT</name>
-            <url>./LICENSE.txt</url>
+            <url>http://d670-1.nl.fatwire.com/fatwire-license.txt</url>
             <distribution>repo</distribution>
         </license>
     </licenses>
     <scm>
-        <connection>scm:svn:http://d670-1.nl.fatwire.com/svn/dta/benchmark</connection>
-        <developerConnection>scm:svn:http://d670-1.nl.fatwire.com/svn/dta/benchmark</developerConnection>
-        <url>http://d670-1.nl.fatwire.com/viewvc/dta/benchmark</url>
+        <connection>scm:svn:http://www.nl.fatwire.com/svn/dta/benchmark/trunk</connection>
+        <developerConnection>scm:svn:http://www.nl.fatwire.com/svn/dta/benchmark/trunk</developerConnection>
+        <url>http://www.nl.fatwire.com/viewvc/dta/benchmark/trunk</url>
     </scm>
     <organization>
         <name>fatWire</name>
         <url>http://www.fatwire.com</url>
     </organization>
     <build>
-        <sourceDirectory>src/main/java</sourceDirectory>
-        <scriptSourceDirectory>src/main/scripts</scriptSourceDirectory>
-        <testSourceDirectory>src/test/java</testSourceDirectory>
-        <outputDirectory>target/classes</outputDirectory>
-        <testOutputDirectory>target/test-classes</testOutputDirectory>
         <extensions>
             <extension>
                 <groupId>org.apache.maven.wagon</groupId>
@@ -90,9 +85,9 @@
         </plugins>
     </build>
     <modules>
+        <module>fw-httpclient-connectionpool</module>
         <module>fw-benchmark-core</module>
-        <module>fw-benchmark-component</module>
-        <module>fw-plexus-benchmark-application</module>
+        <module>fw-benchmark-application</module>
     </modules>
 
     <reporting>
@@ -107,6 +102,7 @@
                     <links>
                         <link>http://java.sun.com/javaee/5/docs/api</link>
                         <link>http://java.sun.com/j2se/1.5.0/docs/api</link>
+                        <link>http://hc.apache.org/httpclient-3.x/apidocs</link>
                     </links>
                 </configuration>
             </plugin>
@@ -139,9 +135,11 @@
             <plugin>
                 <artifactId>maven-checkstyle-plugin</artifactId>
             </plugin>
+            <!--
             <plugin>
                 <artifactId>maven-pmd-plugin</artifactId>
             </plugin>
+            -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-project-info-reports-plugin</artifactId>
@@ -150,10 +148,12 @@
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>changelog-maven-plugin</artifactId>
             </plugin>
+            <!--
             <plugin>
-                <groupId>org.codehaus.mojo</groupId>
+                <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>changes-maven-plugin</artifactId>
             </plugin>
+            -->
         </plugins>
     </reporting>
     <dependencyManagement>
@@ -167,14 +167,9 @@
     </dependencyManagement>
     <repositories>
         <repository>
-            <id>maven2.java.net</id>
-            <name>Java.net Repository for Maven 2</name>
-            <url>http://download.java.net/maven/2</url>
-        </repository>
-        <repository>
             <id>maven2-repository.dev.java.net</id>
             <name>Java.net Repository for Maven</name>
-            <url>http://download.java.net/maven/2/</url>
+            <url>http://download.java.net/maven/2</url>
             <layout>default</layout>
             <snapshots>
                 <enabled>false</enabled>
@@ -196,7 +191,7 @@
         <repository>
             <id>nl.fatwire.com-snapshots</id>
             <name>FatWire Repository for Maven</name>
-            <url>http://d670-1.nl.fatwire.com/snapshot-repo</url>
+            <url>http://www.nl.fatwire.com/snapshot-repo</url>
             <snapshots>
                 <enabled>true</enabled>
             </snapshots>
@@ -213,7 +208,7 @@
     <distributionManagement>
         <site>
             <id>website</id>
-            <url>scp://d670-1.nl.fatwire.com/var/www/html/dta/benchmark/${project.version}</url>
+            <url>scp://d670-1.nl.fatwire.com/var/www/html/dta/benchmark</url>
         </site>
         <!-- use the following if you're not using a snapshot version. -->
         <repository>
