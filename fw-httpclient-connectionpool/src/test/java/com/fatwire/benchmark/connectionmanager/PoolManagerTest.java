@@ -25,8 +25,10 @@ public class PoolManagerTest extends TestCase {
     protected void tearDown() throws Exception {
         try {
             connectionManager.shutdown();
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (IllegalStateException e) {
+            //the one we want
+        } catch(Exception e){
+            fail("Expected a IllegalStateException because a connection is in use.");
         }
         poolManager.shutdown();
         super.tearDown();
@@ -35,6 +37,8 @@ public class PoolManagerTest extends TestCase {
     public void testShutdown() {
         PooledHttpConnection conn = connectionManager
                 .getConnection(hostConfiguration);
+        
+        //just a way to get the pool to create a new connection. 
     }
 
 }
