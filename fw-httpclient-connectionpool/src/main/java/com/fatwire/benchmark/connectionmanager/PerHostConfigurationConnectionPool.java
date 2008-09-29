@@ -71,7 +71,7 @@ public class PerHostConfigurationConnectionPool implements ConnectionPool {
                         }
                         closedCounter++;
                     } else {
-                        LOG.warn("PooledHttpConnection[" + i
+                        LOG.debug("PooledHttpConnection[" + i
                                 + "] is still in use. " + pool[i]);
                     }
                     pool[i] = null;
@@ -102,11 +102,9 @@ public class PerHostConfigurationConnectionPool implements ConnectionPool {
     boolean increasePool() {
         int maxPoolSize = connectionManager.getParams()
                 .getMaxConnectionsPerHost(hostConfiguration);
-        //System.out.println("increasePool " + maxPoolSize);
         if (pool.length < maxPoolSize) {
 
             int newSize = Math.min(Math.max(2, pool.length * 2), maxPoolSize);
-            //System.out.println("increasePool2 " + newSize);
             final PooledHttpConnection[] newPool = new PooledHttpConnection[newSize];
             System.arraycopy(pool, 0, newPool, 0, pool.length);
             pool = newPool;
@@ -146,12 +144,11 @@ public class PerHostConfigurationConnectionPool implements ConnectionPool {
                     try {
                         poolLock.wait(timeout);
                     } catch (final InterruptedException e) {
-                        LOG.warn("waiting for the pool was interrupted", e);
+                        LOG.debug("waiting for the pool was interrupted", e);
                     }
                     final long endWait = System.currentTimeMillis();
                     final long newTimeout = (timeout == 0 ? 0 : timeout
                             - (endWait - startWait));
-                    //System.out.println("newTimeout " + newTimeout);
                     if (newTimeout <= 0 && timeout != 0) {
                         return null;
                     }
@@ -160,10 +157,10 @@ public class PerHostConfigurationConnectionPool implements ConnectionPool {
                 return getConnection(timeout);
             } else {
                 useCount++;
-                //conn.increaseUseCount();
                 if (LOG.isTraceEnabled()) {
                     LOG.trace("getConnection(" + timeout + ") conn.usecount: "
-                            + conn.getUseCount() + " pool usecount" + useCount + " in "
+                            + conn.getUseCount() + " pool usecount" + useCount
+                            + " in "
                             + Long.toString((System.nanoTime() - t) / 1000)
                             + "us");
                 }
@@ -204,9 +201,11 @@ public class PerHostConfigurationConnectionPool implements ConnectionPool {
                 if ((conn != null) && !conn.isInUse() && conn.isOpen()) {
                     final int val = conn.increaseIdleCount();
                     if (val > maxIdleCount) {
-                        LOG.debug("Closing connection[" + i + "] for poolSize "
-                                + pool.length + ". UseCount was "
-                                + conn.getUseCount());
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("Closing connection[" + i
+                                    + "] for poolSize " + pool.length
+                                    + ". UseCount was " + conn.getUseCount());
+                        }
                         conn.close();
                     }
                 }
