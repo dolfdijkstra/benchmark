@@ -6,19 +6,13 @@
         <version>1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
-    <groupId>org.fatwire.benchmark.plexus</groupId>
+    <groupId>com.fatwire.benchmark.plexus</groupId>
     <artifactId>fw-plexus-benchmark-application</artifactId>
     <name>${pom.artifactId}</name>
     <version>${benchmark-version}</version>
     <!-- packaging>plexus-application</packaging-->
     <packaging>jar</packaging>
     <dependencies>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>3.8.1</version>
-            <scope>test</scope>
-        </dependency>
         <dependency>
             <groupId>com.fatwire.benchmark.plexus</groupId>
             <artifactId>fw-benchmark-component</artifactId>
@@ -63,7 +57,7 @@
                     <programs>
                         <program>
                             <name>benchmark</name>
-                            <mainClass>com.fatwire.benchmark.plexus.application.App</mainClass>
+                            <mainClass>com.fatwire.benchmark.FatWireBenchmark</mainClass>
                         </program>
                     </programs>
                 </configuration>
