@@ -36,6 +36,11 @@ public class HttpTransaction {
         return response;
     }
 
+    /**
+     * 
+     * 
+     * @return the elapsed time in milliseconds to execute the http transaction
+     */
     long getDownloadTime() {
         return downloadTime;
     }
@@ -45,7 +50,7 @@ public class HttpTransaction {
     }
 
     /**
-     * @return the startTime
+     * @return the startTime since epoch
      */
     public long getStartTime() {
         return startTime;
