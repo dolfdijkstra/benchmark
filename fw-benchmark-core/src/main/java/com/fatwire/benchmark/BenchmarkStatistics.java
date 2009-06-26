@@ -98,8 +98,6 @@ public class BenchmarkStatistics {
 
     private Timer timer;
 
-    
-
     private File historyFile;
 
     private AtomicInteger concurrencyCounter = new AtomicInteger();
@@ -114,7 +112,7 @@ public class BenchmarkStatistics {
 
     private class IntervalTask extends TimerTask {
         private final File intervalStatFile;
-        
+
         /**
          * @param intervalStatFile
          */
@@ -186,13 +184,13 @@ public class BenchmarkStatistics {
         this.startTime = System.currentTimeMillis();
         timer = new Timer(true);
 
-        timer.scheduleAtFixedRate(new IntervalTask(new File(reportDirectory, "interval-stat.log")), 5000L, 5000L);
-        
+        timer.scheduleAtFixedRate(new IntervalTask(new File(reportDirectory,
+                "interval-stat.log")), 5000L, 5000L);
+
         this.historyFile = new File(reportDirectory, "history.log");
         if (historyFile.exists()) {
             historyFile.delete();
         }
-
 
         timer.scheduleAtFixedRate(new TimerTask() {
 
@@ -320,10 +318,12 @@ public class BenchmarkStatistics {
     }
 
     class TransactionConsumer implements Runnable {
-double counter=0;
-long totalTime=0;
+        double counter = 0;
+
+        long totalTime = 0;
+
         public void run() {
-            boolean c=true;
+            boolean c = true;
             while (c) {
                 TransactionPoint tp;
                 try {
@@ -335,13 +335,13 @@ long totalTime=0;
                     final UriStat s = get(tp.getUri());
                     s.incrementForTransactionPoint(tp);
                     counter++;
-                    totalTime = (System.nanoTime()-t)/1000;
+                    totalTime = (System.nanoTime() - t) / 1000;
                 } catch (InterruptedException e) {
                     //e.printStackTrace();
-                    if (counter >0){
-                     System.out.println(totalTime/counter);   
+                    if (counter > 0) {
+                        System.out.println(totalTime / counter);
                     }
-                    c=false;
+                    c = false;
                 }
             }
 
